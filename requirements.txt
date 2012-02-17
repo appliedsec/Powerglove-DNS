@@ -1,0 +1,6 @@
+SQLAlchemy
+psycopg2
+configobj
+netaddr>=0.7.5
+argparse
+
