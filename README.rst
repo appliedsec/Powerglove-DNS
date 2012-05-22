@@ -1,7 +1,7 @@
 Powerglove DNS
 ==============================
 
-powerglove DNS is a simple for reserving an IP and hostname pair in a Power DNS installation
+powerglove DNS is a simple tool for reserving an IP and hostname pair in a Power DNS installation
 
 usage: powerglove-dns [-h] [--remove FQDN] [--ttl TTL] [--domain name]
                      [--is_present FQDN] [--text TEXT_RECORD_CONTENTS]
