@@ -24,7 +24,7 @@ extra_setup = {}
 
 setup(
     name='powerglove-dns',
-    version='1.0.0',
+    version='1.0.1',
     author='Rob Dennis',
     author_email='rdennis+powerglove-dns@gmail.com',
     description="Reserves an appropriate ip in a PowerDNS installation for a given hostname, updating reverse/forward/text records as well",
@@ -34,7 +34,7 @@ setup(
     test_suite = 'unittest2.collector',
     entry_points="""
     [console_scripts]
-    dns-assistant = dns_assistant:main
+    powerglovedns = powerglove_dns:main
     """,
     packages=find_packages(exclude=['ez_setup']),
     include_package_data=True,
