@@ -23,7 +23,7 @@ parser.add_argument('--is_present', metavar='FQDN', dest='fqdn_to_test',
                          'name is present in the DNS A records')
 parser.add_argument('--text', metavar='TEXT_RECORD_CONTENTS',
                     dest='text_record_contents',
-                    default='created by DNS assistant on '
+                    default='created by Powerglove-DNS on '
                             '{0}'.format(datetime.datetime.utcnow()),
                     help='if specified, make a text record with the provided '
                          'contents (as a string)')
