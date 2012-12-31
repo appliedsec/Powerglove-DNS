@@ -477,6 +477,7 @@ class PowergloveDns(object):
                                 domain_id=record.domain_id,
                                 type='TXT',
                                 content=text_contents,
+                                ttl=record.ttl,
                                 id=None)
             created_records['TXT'] = txt_record
             self.log.debug('setting up "TXT" record: %r', txt_record)
