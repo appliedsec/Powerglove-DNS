@@ -32,7 +32,8 @@ optional arguments:
                         [default: 300]
   --domain name         instead of specifying an IPRange or CIDR, specify the
                         domain you wish to place the hostname (e.g. test.tld
-                        or example.tld)
+                        or example.tld; this uses the ip_mapping section of 
+                        your config file)
   --is_present FQDN     returns True if a provided fully-qualified domain name
                         is present in the DNS A records
   --text TEXT_RECORD_CONTENTS
