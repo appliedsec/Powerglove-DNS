@@ -2,6 +2,7 @@ Powerglove DNS
 ==============================
 [![Build Status](https://travis-ci.org/appliedsec/Powerglove-DNS.png)](https://travis-ci.org/appliedsec/Powerglove-DNS)
 
+```
 powerglovedns --help
 usage: powerglovedns [-h] [--ttl TTL] [--text TEXT_RECORD_CONTENTS]
                      (--cname CNAME FQDN A Record FQDN | --is_present FQDN | --remove FQDN | --add FQDN [RANGE ...])
@@ -36,3 +37,4 @@ add options:
   --text TEXT_RECORD_CONTENTS
                         if specified, make a text record with the provided
                         contents (as a string)
+```
