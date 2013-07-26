@@ -133,8 +133,18 @@ class PowergloveDns(object):
 
         return self._session
 
-    def get_domain_by_id(self, session, domain_id):
-        return self.session.query(Domain).filter_by(id=domain_id).one()
+    @property
+    def domains(self):
+        """
+        @return: a C{dict} mapping the domain name
+        """
+
+        if not hasattr(self, '_domains'):
+            self._domains = dict([(record.name, record)
+                                  for record in self.session.query(Domain).all()])
+
+
+        return self._domains
 
     def get_existing_records(self, rec_type='A', **criteria):
         if rec_type not in ('A', 'PTR', 'SOA', 'CNAME', 'TXT'):
@@ -171,14 +181,38 @@ class PowergloveDns(object):
             self.log.debug('yielding: %r <-> %r', mapped_domain, _range)
             yield mapped_domain, _range
 
-    def get_domain(self, ip_range, domain=None):
-        if not isinstance(ip_range, netaddr.ip.IPRange):
-            ip_range = self.get_ip_range(ip_range, domain)
-        for mapped_domain, range in self.yield_mapped_domains():
-            if ip_range in range:
-                return mapped_domain
-        raise PowergloveError('unable to map a domain to IP range: {0}',
-                                ip_range)
+    def get_domain(self, fqdn):
+        """
+
+        @param fqdn: the C{str} fully-qualified domain name
+        @return: the associated Domain as a C{Domain} as determined based on the FQDN
+        """
+
+        def _split_reverse(dot_delimited_string):
+            return tuple(reversed(dot_delimited_string.split('.')))
+
+
+        fqdn_parts = _split_reverse(fqdn)
+
+        inferred_domain = None
+        max_matches = 0
+        for name, domain in self.domains.iteritems():
+            matches = 0
+            complete_match = True
+            domain_parts = _split_reverse(name)
+            for domain_part, fqdn_part in zip(domain_parts, fqdn_parts):
+                if domain_part == fqdn_part:
+                    matches += 1
+                else:
+                    complete_match = False
+            if matches > max_matches and complete_match:
+                max_matches = matches
+                inferred_domain = domain
+
+        if inferred_domain:
+            return inferred_domain
+        else:
+            raise PowergloveError('unable to get a domain from FQDN: %r' % fqdn)
 
     def reverse_ip_to_ptr_record(self, ip_address):
         if isinstance(ip_address, IPAddress):
@@ -337,14 +371,14 @@ class PowergloveDns(object):
         self.log.info('created CNAME alias %r', cname_record)
         return cname_record.name, cname_record.content
 
-    def add_a_record(self, hostname, ip_range=None,
-                     domain=None, ttl=None, text_contents=None):
+    def add_a_record(self, fqdn, ip_range=None,
+                     ttl=None, text_contents=None):
         """
         Make an IP reservation for a given hostname
 
-        @param hostname: the hostname to reserve on the provided domain, with
+        @param fqdn: the fully-qualified domain to reserve with
             an ip in the given ip_range
-        @type hostname: C{str}
+        @type fqdn: C{str}
         @param ip_range: The representation of the the IP Range to choose an IP
             from, will be parsed by get_ip_range, so if present, should be in
             form of L{netaddr.IPRange},L{netaddr.IPGlob}, CIDR, or include both
@@ -362,25 +396,19 @@ class PowergloveDns(object):
         @return: C{tuple} consisting of (a_record.name, selected_ip_address)
         """
 
-        if domain:
-            ip_range = self.get_ip_range(ip_range, domain)
-        else:
-            ip_range = self.get_ip_range(ip_range)
-            domain = self.get_domain(ip_range)
 
-        fqdn = self.get_FQDN(hostname, domain)
+        ip_range = self.get_ip_range(ip_range)
+
         if self.fqdn_is_present(fqdn):
-            raise PowergloveError('fully-qualified domain name {0} exists.',
-                                    fqdn)
+            raise PowergloveError('fully-qualified domain name {0} exists.', fqdn)
 
-        self.log.debug('attempting to add a record for hostname'
-                       ' "%r" within ip_range %r (domain: %r)',
-                       hostname, ip_range, domain)
+        self.log.debug('attempting to add a record for FQDN '
+                       '"%r" within ip_range %r',
+                       fqdn, ip_range)
 
         selected_ip_address = self.get_available_ip_address(ip_range)
 
-
-        a_domain = self.session.query(Domain).filter_by(name=domain).one()
+        a_domain = self.get_domain(fqdn)
 
         a_record = Record(name=fqdn,
                         domain_id=a_domain.id,

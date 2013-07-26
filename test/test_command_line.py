@@ -1,167 +1,19 @@
-import collections
-import time
-
-from copy import deepcopy
-import sqlalchemy
-
-from sqlalchemy.orm import sessionmaker
-
 from test import PowergloveTestCase
 from powerglove_dns import main
 from powerglove_dns.powerglove import PowergloveError
-from powerglove_dns.model import Record, Domain, Base
+from powerglove_dns.model import Record
 
-def setup_mock_pdns(session):
-    """
-    Setups a mock PDNS installation with existing domains and records using
-    the provided session
-
-    @param session: the sqlalchemy session
-
-    @return: a namedtuple of the PDNS database in the form (domains, records)
-        holding the domains in the form of:
-            stable_a stable_ptr_134 stable_ptr_135
-            testing_a testing_ptr_132 testing_ptr_133
-        and with records in the form of:
-            stable_a_134 stable_a_135 stable_ptr_134 stable_ptr_135
-            testing_a_132 testing_a_133 testing_ptr_132 testing_ptr_133
-            cname_record record_with_cname txt_record record_with_txt
-    """
-
-    CurrentPdns = collections.namedtuple('CurrentPdns', 'domains records')
-    PdnsDomainRows = collections.namedtuple('PdnsDomainRows',
-                                         'stable_a stable_ptr_134 '
-                                         'stable_ptr_135 testing_a '
-                                         'testing_ptr_132 testing_ptr_133')
-
-    PdnsRecordRows = collections.namedtuple('PdnsRecordRows',
-                                            'stable_a_134 stable_a_135 '
-                                            'stable_ptr_134 stable_ptr_135 '
-                                            'testing_a_132 testing_a_133 '
-                                            'testing_ptr_132 testing_ptr_133 '
-                                            'cname_record record_with_cname '
-                                            'txt_record record_with_txt')
-
-    current_domains = PdnsDomainRows(Domain(0, 'stable.tld'),
-                                     Domain(1, '134.168.192.in-addr.arpa'),
-                                     Domain(2, '135.168.192.in-addr.arpa'),
-                                     Domain(3, 'test.tld'),
-                                     Domain(4, '132.168.192.in-addr.arpa'),
-                                     Domain(5, '133.168.192.in-addr.arpa'))
-
-    current_records = PdnsRecordRows(Record(0, 0, 'test_existing.stable.tld',
-                                            'A', '192.168.134.2'),
-                                     Record(1, 0, 'test_existing2.stable.tld',
-                                            'A', '192.168.135.2'),
-                                     Record(2, 1, '2.134.168.192.in-addr.arpa',
-                                            'PTR', 'test_existing.stable.tld'),
-                                     Record(3, 2, '2.135.168.192.in-addr.arpa',
-                                            'PTR', 'test_existing2.stable.tld'),
-                                     Record(4, 3, 'test_existing.test.tld',
-                                            'A', '192.168.132.2'),
-                                     Record(5, 3, 'test_existing2.test.tld',
-                                            'A', '192.168.133.2'),
-                                     Record(6, 4, '2.132.168.192.in-addr.arpa',
-                                            'PTR', 'test_existing.test.tld'),
-                                     Record(7, 5, '2.133.168.192.in-addr.arpa',
-                                            'PTR', 'test_existing2.test.tld'),
-                                     Record(21, 3, 'cnamer.test.tld',
-                                            'CNAME', 'cnamee.test.tld'),
-                                     Record(22, 3, 'cnamee.test.tld',
-                                            'A', '192.168.133.57'),
-                                     Record(23, 3, 'text.test.tld',
-                                            'TXT', 'this is a text record'),
-                                     Record(24, 3, 'text.test.tld',
-                                            'A', '192.168.133.61')
-                                     )
-
-    Base.metadata.create_all(session.bind)
-
-    # the deepcopy allows the original records to still be used as
-    # comparisons when deletes happen on the actual db
-    for domain in deepcopy(current_domains):
-        session.add(domain)
-    session.commit()
-
-    for record in deepcopy(current_records):
-        session.add(record)
-    session.commit()
-
-    return CurrentPdns(current_domains, current_records)
-
+# this is either unittest2 or built-in unittest if >= py 2.7
+from test import unittest
 
 
 class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
 
-    def _querySession(self, session, table=Record, **kwargs):
-        """
-        helper function for querying the session
-
-        @arg table: the declarative-base class object from powerglove_dns.model,
-            defaults to Record
-        @kwargs: the keyword arguments to query with
-        @return: all of the results of the query
-        """
-
-        return session.query(table).filter_by(**kwargs).all()
-
-    def getOneRecord(self, session=None, **kwargs):
-        """
-        @arg session: the database session to use for the query
-        @args
-        @raise AssertionError: if more or less than one record exists based on
-            the rec_type/name
-        """
-        if session is None:
-            session = self.Session()
-
-        results = self._querySession(session, **kwargs)
-        if len(results) > 1:
-            raise AssertionError('found >1 records for %r: %r' % (kwargs,
-                                                                  results))
-        elif not results:
-            raise AssertionError('No records found for %r' % kwargs)
-
-        return results[0]
-
-    def assertRecordExists(self, session=None, **kwargs):
-        """
-        @arg rec_type: the type of record, either 'A' or 'PTR' primarily
-        @arg name: the name of the record, FQDN for A records, reverse DNS
-            for PTR records
-        @arg session: the database session to use for the query
-        @raise AssertionError: if the record does not exist
-        """
-        if session is None:
-            session = self.Session()
-        if not len(self._querySession(session, **kwargs)):
-            raise AssertionError('unable to find record from %s' % kwargs)
-
-    def assertRecordDoesNotExist(self, session=None, **kwargs):
-        """
-        @arg rec_type: the type of record, either 'A' or 'PTR' primarily
-        @arg name: the name of the record, FQDN for A records, reverse DNS for
-            PTR records
-        @arg session: the database session to use for the query
-        @raise AssertionError: if the record does exist
-        """
-        if session is None:
-            session = self.Session()
-        if len(self._querySession(session, **kwargs)):
-            raise AssertionError('unexpectedly found record using %s' % kwargs)
-
     def run_with_args(self, args):
+        self.log.debug('about to run with: %r', args)
+        return main(args, logger=self.log, session=self.Session)
 
-        return main(args, logger=self.log, session=self.Session,
-                          config_file=self.config_file,
-                          extra_config_info={'test.tld': '192.168.132-133.*',
-                                             'stable.tld': '192.168.134-135.*'})
 
-    def setUp(self):
-        url = self.config['sqlalchemy']['url']
-        self.Session = sessionmaker(bind=sqlalchemy.create_engine(url))
-        self.log.debug('set up the session')
-        self.pdns = setup_mock_pdns(self.Session())
 
     def test_sanity(self):
         """test the manually inserted items are indeed in the database"""
@@ -259,21 +111,25 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
 
         manual_ip = '192.168.135.101'
         next_ip = '192.168.135.102'
-        self.add_and_test_new_hostname(['must_be_%s' % manual_ip,
+        self.add_and_test_new_hostname(['must_be_%s.stable.tld' % manual_ip,
                                         manual_ip, manual_ip],
                                        ip=manual_ip)
-        self.add_and_test_new_hostname(['as_a_result_must_be_%s' % next_ip,
+        self.add_and_test_new_hostname(['as_a_result_must_be_%s.stable.tld' % next_ip,
                                         manual_ip, next_ip], ip=next_ip)
-        self.add_and_test_new_hostname(['whatever_basically',
+        self.add_and_test_new_hostname(['whatever_basically.stable.tld',
                                         '192.168.132.1',
                                         '192.168.133.255'])
         self.add_and_test_new_hostname(['ip_already_reserved',
                                         manual_ip,
                                         next_ip],
                                        invalid=True)
+        # it's supposed to lower higher, not higher, lower
+        self.add_and_test_new_hostname(['invalid_explicit.test.tld', '192.168.132.150', '192.168.132.5'],
+                                       invalid=True)
+
 
         with  self.assertRaises(AssertionError):
-            self.add_and_test_new_hostname(['mismatched_ip',
+            self.add_and_test_new_hostname(['mismatched_ip.stable.tld',
                                             '192.168.135.62',
                                             '192.168.135.62'],
                                            ip='192.168.135.63')
@@ -282,53 +138,59 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
 
         manual_ip = '192.168.135.101'
         next_ip = '192.168.135.102'
-        name = self.add_and_test_new_hostname(['must_be_%s' % manual_ip, manual_ip, manual_ip],
+        name = self.add_and_test_new_hostname(['must_be_%s.stable.tld' % manual_ip, manual_ip, manual_ip],
                                               ip=manual_ip, delete=True)
         self.assertRecordDoesNotExist(type='A', name=name)
         self.assertRecordDoesNotExist(type='PTR', content=name)
-        name = self.add_and_test_new_hostname(['due_to_delete_is_still_%s' % manual_ip, manual_ip, next_ip],
+        name = self.add_and_test_new_hostname(['due_to_delete_is_still_%s.stable.tld' % manual_ip, manual_ip, next_ip],
                                               ip=manual_ip)
         self.assertRecordExists(type='A', name=name)
         self.assertRecordExists(type='PTR', content=name)
 
     def test_avoiding_invalid_addresses(self):
 
-        self.add_and_test_new_hostname(['must_not_be_0_255_or_duplicate', '192.168.132.255', '192.168.133.2'],
+        self.add_and_test_new_hostname(['must_not_be_0_255_or_duplicate.test.tld', '192.168.132.255', '192.168.133.2'],
                                        invalid=True)
-        self.add_and_test_new_hostname(['found_valid_address', '192.168.132.255', '192.168.133.3'],
+        self.add_and_test_new_hostname(['found_valid_address.test.tld', '192.168.132.255', '192.168.133.3'],
                                        ip='192.168.133.3')
 
     def test_duplicate_hostname(self):
 
-        self.add_and_test_new_hostname(['brand_new_name', '192.168.132.150', '192.168.132.151'])
-        self.add_and_test_new_hostname(['brand_new_name', '192.168.132.155', '192.168.132.156'], invalid=True)
+        self.add_and_test_new_hostname(['brand_new_name.test.tld', '192.168.132.150', '192.168.132.151'])
+        self.add_and_test_new_hostname(['brand_new_name.test.tld', '192.168.132.155', '192.168.132.156'], invalid=True)
 
-    def test_catching_invalid_commandline_arguments(self):
+    @unittest.expectedFailure
+    def test_catching_ranges_outside_what_a_particular_domain_spans(self):
 
-        self.add_and_test_new_hostname(['invalid_explicit', '192.168.132.150', '192.168.132.5'], invalid=True)
-        self.add_and_test_new_hostname(['invalid_CIDR', '192.168/2'], invalid=True)
-        self.add_and_test_new_hostname(['invalid_IPGlob', '192.168.*.*'], invalid=True)
+        # stable only is a 192.168.134/24 domain
+        self.add_and_test_new_hostname(['in_the_range_of_testing.stable.tld', '192.168.132-133.*'], invalid=True)
+        self.add_and_test_new_hostname(['outside_the_range.stable.tld', '192.168.132/22'], invalid=True)
+        self.add_and_test_new_hostname(['outside_the_range.stable.tld', '192.168.132-135.*'], invalid=True)
+        self.add_and_test_new_hostname(['bridges_the_domain.stable.tld', '192.168.133-134.*'], invalid=True)
+
+    @unittest.expectedFailure
+    def test_catching_ranges_outside_what_is_pdns(self):
+        # this is WAAAAAAAAY too big
+        self.add_and_test_new_hostname(['invalid_CIDR.test.tld', '192.168/2'], invalid=True)
+        self.add_and_test_new_hostname(['invalid_IPGlob.test.tld', '192.168.*.*'], invalid=True)
 
     def test_adding_with_CIDR(self):
 
-        self.add_and_test_new_hostname(['32_bit_mask', '192.168.135.100/32'])
-        self.add_and_test_new_hostname(['23_bit_mask', '192.168.132/23'])
-        self.add_and_test_new_hostname(['23_bit_mask_same_domain', '192.168.133/23'])
-        self.add_and_test_new_hostname(['outside_the_range', '192.168.132/22'], invalid=True)
+        self.add_and_test_new_hostname(['32_bit_mask.stable.tld', '192.168.135.100/32'])
+        self.add_and_test_new_hostname(['23_bit_maskstable.tld', '192.168.132/23'])
+        self.add_and_test_new_hostname(['23_bit_mask_same_domains.table.tld', '192.168.133/23'])
 
     def test_adding_with_IPGlob(self):
 
-        self.add_and_test_new_hostname(['32_bit_mask', '192.168.135.100-101'])
-        self.add_and_test_new_hostname(['23_bit_mask', '192.168.132-133.*'])
-        self.add_and_test_new_hostname(['outside_the_range', '192.168.132-135.*'], invalid=True)
-        self.add_and_test_new_hostname(['bridges_the_domain', '192.168.133-134.*'], invalid=True)
+        self.add_and_test_new_hostname(['32_bit_mask.stable.tld', '192.168.135.100-101'])
+        self.add_and_test_new_hostname(['23_bit_mask.stable.tld', '192.168.132-133.*'])
 
-    def test_adding_with_implicit_domain(self):
+    def test_adding_with_explicit_ip(self):
 
-        self.add_and_test_new_hostname(['new_test', '--domain', 'test.tld'])
-        self.add_and_test_new_hostname(['new_stable', '--domain', 'stable.tld'])
-        self.add_and_test_new_hostname(['unknown_domain', '--domain', 'what.tld'], invalid=True)
-        self.add_and_test_new_hostname(['omitted_domain'], invalid=True)
+        self.add_and_test_new_hostname(['hundred.stable.tld', '192.168.135.100'])
+        self.add_and_test_new_hostname(['hundredone.stable.tld', '192.168.135.101'])
+        self.add_and_test_new_hostname(['hundredone-dup.stable.tld', '192.168.135.101'], invalid=True)
+
 
     def test_creating_cname_for_existing_a_record(self):
 
@@ -358,7 +220,7 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
         """
         text_record = 'test.thing.what'
 
-        self.add_and_test_new_hostname(['record_with_associated_text', '--domain', 'test.tld',
+        self.add_and_test_new_hostname(['record_with_associated_text.test.tld', '192.168.132.233',
                                         '--text', text_record])
         self.assertRecordExists(type='TXT', name='record_with_associated_text.test.tld',
                                 content=text_record)
@@ -373,6 +235,7 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
         @raise RuntimeError: if there was an issue adding the hostname
         @raise AssertionError: if an assertion is failed
         """
+        args = ['--add'] + args
         if invalid:
             with self.assertRaises(assertion):
                 self.run_with_args(args)
@@ -389,14 +252,8 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
 
             return added_hostname
 
-    def test_unable_to_handle_implicit_mapping(self):
-        with self.assertRaises(PowergloveError) as cm:
-            self.run_with_args(['fall.down.',
-                                '--domain',
-                                'go.boom'])
-        self.assertEqual(cm.exception.output, "unable to handle implicit mapping with domain: go.boom")
 
     def test_unable_to_handle_no_range_or_domain(self):
         with self.assertRaises(PowergloveError) as cm:
-            self.run_with_args(['fall.down.'])
+            self.run_with_args(['--add', 'fall.down'])
         self.assertEqual(cm.exception.output, "unable to handle implicit mapping without a range or domain")
