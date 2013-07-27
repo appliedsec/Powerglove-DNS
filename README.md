@@ -12,7 +12,7 @@ qualified domain name
 
 optional arguments:
   -h, --help            show this help message and exit
-  --cname CNAME FQDN A Record FQDN
+  --cname CNAME_FQDN A_Record_FQDN
                         if provided, create a CNAME alias from the
                         providedcname fully-qualified-domain-name to the
                         providedA record fully-qualified domain name. No new

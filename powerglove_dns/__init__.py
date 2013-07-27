@@ -23,7 +23,7 @@ add_group.add_argument('--text', metavar='TEXT_RECORD_CONTENTS',
                             'contents (as a string)')
 
 action_group = parser.add_mutually_exclusive_group(required=True)
-action_group.add_argument('--cname', metavar=('CNAME FQDN', 'A Record FQDN'),
+action_group.add_argument('--cname', metavar=('CNAME_FQDN', 'A_Record_FQDN'),
                           dest='cname', default=None, nargs=2,
                           help='if provided, create a CNAME alias from the provided'
                                'cname fully-qualified-domain-name to the provided'
