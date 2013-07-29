@@ -159,18 +159,27 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
         self.add_and_test_new_hostname(['brand_new_name.test.tld', '192.168.132.150', '192.168.132.151'])
         self.add_and_test_new_hostname(['brand_new_name.test.tld', '192.168.132.155', '192.168.132.156'], invalid=True)
 
-    @unittest.expectedFailure
     def test_catching_ranges_outside_what_a_particular_domain_spans(self):
 
-        # stable only is a 192.168.134/24 domain
-        self.add_and_test_new_hostname(['in_the_range_of_testing.stable.tld', '192.168.132-133.*'], invalid=True)
-        self.add_and_test_new_hostname(['outside_the_range.stable.tld', '192.168.132/22'], invalid=True)
-        self.add_and_test_new_hostname(['outside_the_range.stable.tld', '192.168.132-135.*'], invalid=True)
-        self.add_and_test_new_hostname(['bridges_the_domain.stable.tld', '192.168.133-134.*'], invalid=True)
+        # in the event that stable is, by convention, a 192.168.134/24 domain, we're not enforcing that
+        self.add_and_test_new_hostname(['in_the_range_of_testing.stable.tld', '192.168.132-133.*'])
+        self.add_and_test_new_hostname(['outside_the_range_cidr.stable.tld', '192.168.132/22'])
+        self.add_and_test_new_hostname(['outside_the_range_glob.stable.tld', '192.168.132-135.*'])
+        self.add_and_test_new_hostname(['bridges_the_domain.stable.tld', '192.168.133-134.*'])
 
-    @unittest.expectedFailure
+    def test_tying_PTR_records_to_the_correct_PTR_domain_in_case_of_multiple_options(self):
+        self.add_and_test_new_hostname(['sanity_check.tld', '10.10.*.*'])
+        self.add_and_test_new_hostname(['sanity_check2.tld', '10.20.*.*'])
+        sanity_check_10_10 = self.getOneRecord(content='sanity_check.tld', type='PTR')
+        # check setup mock_dns, this is Domain(9, '10.10.in-addr.arpa'),
+        self.assertEqual(sanity_check_10_10.domain_id, 9)
+        sanity_check_10_20 = self.getOneRecord(content='sanity_check2.tld', type='PTR')
+        # check setup mock_dns, this is Domain(9, '10.in-addr.arpa'),
+        self.assertEqual(sanity_check_10_20.domain_id, 10)
+
+
     def test_catching_ranges_outside_what_is_pdns(self):
-        # this is WAAAAAAAAY too big
+        # this is WAAAAAAAAY too big and we don't have a PTR associated
         self.add_and_test_new_hostname(['invalid_CIDR.test.tld', '192.168/2'], invalid=True)
         self.add_and_test_new_hostname(['invalid_IPGlob.test.tld', '192.168.*.*'], invalid=True)
 

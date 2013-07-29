@@ -146,6 +146,24 @@ class PowergloveDns(object):
 
         return self._domains
 
+    @property
+    def a_domains(self):
+        """
+        @return: a C{dict} mapping the A domain name to the domain
+        """
+
+        return dict([(dom_name, dom) for dom_name, dom in self.domains.items()
+                     if not dom_name.endswith('.in-addr.arpa')])
+
+    @property
+    def ptr_domains(self):
+        """
+        @return: a C{dict} mapping the PTR domain name to the domain
+        """
+
+        return dict([(dom_name, dom) for dom_name, dom in self.domains.items()
+                     if dom_name.endswith('.in-addr.arpa')])
+
     def get_existing_records(self, rec_type='A', **criteria):
         if rec_type not in ('A', 'PTR', 'SOA', 'CNAME', 'TXT'):
             raise PowergloveError('invalid record type {0} specified',
@@ -175,33 +193,29 @@ class PowergloveDns(object):
         return self.session.query(Record).filter_by(type=rec_type,
                                                     **criteria).all()
 
-    def yield_mapped_domains(self):
-        for mapped_domain, range in self.config['ip_mapping'].iteritems():
-            _range = self.get_ip_range(range.split(), self.config)
-            self.log.debug('yielding: %r <-> %r', mapped_domain, _range)
-            yield mapped_domain, _range
-
-    def get_domain(self, fqdn):
+    def _get_closest_domain_match_from_string(self, record_string, domains):
         """
+        convenience function for finding the closest matching domain for a string record (a more specific domain wins
+        if more than one domain matches
 
-        @param fqdn: the C{str} fully-qualified domain name
-        @return: the associated Domain as a C{Domain} as determined based on the FQDN
+        @param record_string:
+        @param domains:
+        @return:
         """
 
         def _split_reverse(dot_delimited_string):
             return tuple(reversed(dot_delimited_string.split('.')))
 
-
-        fqdn_parts = _split_reverse(fqdn)
+        record_string_parts = _split_reverse(record_string)
 
         inferred_domain = None
         max_matches = 0
-        for name, domain in self.domains.iteritems():
+        for name, domain in domains.iteritems():
             matches = 0
             complete_match = True
             domain_parts = _split_reverse(name)
-            for domain_part, fqdn_part in zip(domain_parts, fqdn_parts):
-                if domain_part == fqdn_part:
+            for domain_part, record_name_part in zip(domain_parts, record_string_parts):
+                if domain_part == record_name_part:
                     matches += 1
                 else:
                     complete_match = False
@@ -212,7 +226,26 @@ class PowergloveDns(object):
         if inferred_domain:
             return inferred_domain
         else:
-            raise PowergloveError('unable to get a domain from FQDN: %r' % fqdn)
+            raise PowergloveError('unable to get a domain from associated string: %r' % record_string)
+
+    def get_ptr_domain_from_ptr_record_name(self, ptr_name):
+        """
+
+        @param ptr_name: the PTR record name to get a domain from
+        @return: the associated Domain as a C{Domain} as determined based on the PTR record name
+        """
+
+        return self._get_closest_domain_match_from_string(ptr_name, self.ptr_domains)
+
+
+    def get_a_domain_from_fqdn(self, fqdn):
+        """
+
+        @param fqdn: the C{str} fully-qualified domain name
+        @return: the associated Domain as a C{Domain} as determined based on the FQDN
+        """
+
+        return self._get_closest_domain_match_from_string(fqdn, self.a_domains)
 
     def reverse_ip_to_ptr_record(self, ip_address):
         if isinstance(ip_address, IPAddress):
@@ -408,7 +441,7 @@ class PowergloveDns(object):
 
         selected_ip_address = self.get_available_ip_address(ip_range)
 
-        a_domain = self.get_domain(fqdn)
+        a_domain = self.get_a_domain_from_fqdn(fqdn)
 
         a_record = Record(name=fqdn,
                         domain_id=a_domain.id,
@@ -484,9 +517,7 @@ class PowergloveDns(object):
         created_records = dict()
         if record.type == 'A':
             ptr_name = self.reverse_ip_to_ptr_record(record.content)
-            ptr_dom_name = ptr_name.partition('.')[-1]
-            ptr_dom = self.session.query(Domain).filter_by(name=
-                                                           ptr_dom_name).one()
+            ptr_dom = self.get_ptr_domain_from_ptr_record_name(ptr_name)
 
             ptr_kwargs = dict(name=ptr_name,
                               content=record.name,

@@ -34,11 +34,12 @@ def setup_mock_pdns(session):
 
     CurrentPdns = collections.namedtuple('CurrentPdns', 'domains records')
     PdnsDomainRows = collections.namedtuple('PdnsDomainRows',
-                                         'tld '
+                                         'tld_a '
                                          'stable_a testing_a '
                                          'super_stable_a super_testing_a '
                                          'testing_ptr_132 testing_ptr_133 '
-                                         'stable_ptr_134 stable_ptr_135')
+                                         'stable_ptr_134 stable_ptr_135 '
+                                         'wide_domain_ptr_10_10 wide_domain_ptr_10')
 
     current_domains = PdnsDomainRows(
         Domain(0, 'tld'),
@@ -50,7 +51,11 @@ def setup_mock_pdns(session):
         Domain(6, '133.168.192.in-addr.arpa'),
         Domain(7, '134.168.192.in-addr.arpa'),
         Domain(8, '135.168.192.in-addr.arpa'),
+        Domain(9, '10.10.in-addr.arpa'),
+        Domain(10, '10.in-addr.arpa'),
     )
+
+    current_domains = current_domains
 
     PdnsRecordRows = collections.namedtuple('PdnsRecordRows',
                                             'stable_a_134 stable_a_135 '
@@ -58,7 +63,7 @@ def setup_mock_pdns(session):
                                             'testing_a_132 testing_a_133 '
                                             'testing_ptr_132 testing_ptr_133 '
                                             'cname_record record_with_cname '
-                                            'txt_record record_with_txt')
+                                            'txt_record record_with_txt tld_a tld_ptr')
 
     current_records = PdnsRecordRows(Record(0, current_domains.stable_a.id, 'test_existing.stable.tld',
                                             'A', '192.168.134.2'),
@@ -83,7 +88,11 @@ def setup_mock_pdns(session):
                                      Record(23, current_domains.testing_a.id, 'text.test.tld',
                                             'TXT', 'this is a text record'),
                                      Record(24, current_domains.testing_a.id, 'text.test.tld',
-                                            'A', '192.168.133.61')
+                                            'A', '192.168.133.61'),
+                                     Record(25, current_domains.tld_a.id, 'big.domain.tld',
+                                            'A', '10.10.111.61'),
+                                     Record(26, current_domains.wide_domain_ptr_10_10.id, '61.111.10.10.in-addr.arpa',
+                                            'PTR', 'big.domain.tld')
                                      )
 
     Base.metadata.create_all(session.bind)
