@@ -111,14 +111,11 @@ def setup_mock_pdns(session):
 
 
 class PowergloveTestCase(unittest.TestCase):
-    config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'test_settings.conf')
 
     @classmethod
     def setUpClass(cls):
-        logging.config.fileConfig(cls.config_file)
         cls.log = logging.getLogger('%s.%s' % (cls.__module__, cls.__name__))
         cls.log.debug('test case initialized')
-        cls.config = configobj.ConfigObj(cls.config_file)
 
     @classmethod
     def tearDownClass(cls):
@@ -126,7 +123,7 @@ class PowergloveTestCase(unittest.TestCase):
 
 
     def setUp(self):
-        url = self.config['sqlalchemy']['url']
+        url = r"sqlite://"
         self.Session = sessionmaker(bind=sqlalchemy.create_engine(url))
         self.log.debug('set up the session')
         self.pdns = setup_mock_pdns(self.Session())

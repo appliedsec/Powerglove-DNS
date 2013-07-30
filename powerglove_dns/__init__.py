@@ -5,9 +5,12 @@ import sys
 
 from powerglove_dns.powerglove import PowergloveDns
 
-parser = argparse.ArgumentParser(description="Reserve an ip address in the network's powerdns install "
-                                             "for the given fully-qualified domain name")
+parser = argparse.ArgumentParser(description='Reserve an ip address in the network\'s Power DNS install '
+                                             'for the given fully-qualified domain name')
 
+parser.add_argument('--pdns_connect_string', 
+                    help='the SQL Alchemy-compatible connection string to Power DNS. '
+                         'Required in either the configuration file or on the commandline')
 
 add_group = parser.add_argument_group('add options',
                                       'options that are used in the event of a record being added')
@@ -23,15 +26,21 @@ add_group.add_argument('--text', metavar='TEXT_RECORD_CONTENTS',
                             'contents (as a string)')
 
 action_group = parser.add_mutually_exclusive_group(required=True)
+
 action_group.add_argument('--cname', metavar=('CNAME_FQDN', 'A_Record_FQDN'),
                           dest='cname', default=None, nargs=2,
                           help='if provided, create a CNAME alias from the provided'
                                'cname fully-qualified-domain-name to the provided'
                                'A record fully-qualified domain name. No new '
                                'hostnames will be added')
+
 action_group.add_argument('--is_present', metavar='FQDN', dest='fqdn_to_test',
-                          help='returns True if a provided fully-qualified domain '
-                               'name is present in the DNS A records')
+                          help='returns boolean True (return code 1) if a provided fully-qualified domain '
+                               'name is present in the DNS A records, boolean False (0 return code) otherwise')
+
+action_group.add_argument('--assert_is_present', metavar='FQDN', dest='fqdn_to_assert',
+                          help='returns a 0 return code if a provided fully-qualified domain '
+                               'name is present in the DNS A records, 1 otherwise')
 
 action_group.add_argument('--remove', metavar='FQDN',
                           help='Remove the provided fully qualified domain name, '
@@ -46,14 +55,17 @@ action_group.add_argument('--add', metavar=('FQDN', 'RANGE'), nargs='+',
                                '0, 1, or 255 will be used in a given range')
 
 
-def main(args=None, **assistant_kwargs):
+def main(args=None, logger=None, session=None):
 
     args = parser.parse_args(args)
 
-    assistant = PowergloveDns(**assistant_kwargs)
-    if args.fqdn_to_test:
+    assistant = PowergloveDns(session=session, logger=logger)
 
+    if args.fqdn_to_test:
         return assistant.fqdn_is_present(args.fqdn_to_test)
+
+    elif args.fqdn_to_assert:
+        return not assistant.fqdn_is_present(args.fqdn_to_assert)
 
     elif args.remove:
         return assistant.remove_fqdn(args.remove)

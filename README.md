@@ -4,21 +4,31 @@ Powerglove DNS
 
 ```
 powerglovedns --help
-usage: powerglovedns [-h] [--ttl TTL] [--text TEXT_RECORD_CONTENTS]
-                     (--cname CNAME FQDN A Record FQDN | --is_present FQDN | --remove FQDN | --add FQDN [RANGE ...])
+usage: powerglovedns [-h] [--pdns_connect_string PDNS_CONNECT_STRING]
+                     [--ttl TTL] [--text TEXT_RECORD_CONTENTS]
+                     (--cname CNAME_FQDN A_Record_FQDN | --is_present FQDN | --assert_is_present FQDN | --remove FQDN | --add FQDN [RANGE ...])
 
 Reserve an ip address in the network's powerdns install for the given fully-
 qualified domain name
 
 optional arguments:
   -h, --help            show this help message and exit
+  --pdns_connect_string PDNS_CONNECT_STRING
+                        the SQL Alchemy-compatible connection string to Power
+                        DNS. Required in either the configuration file or on
+                        the commandline
   --cname CNAME_FQDN A_Record_FQDN
                         if provided, create a CNAME alias from the
                         providedcname fully-qualified-domain-name to the
                         providedA record fully-qualified domain name. No new
                         hostnames will be added
-  --is_present FQDN     returns True if a provided fully-qualified domain name
-                        is present in the DNS A records
+  --is_present FQDN     returns boolean True (return code 1) if a provided
+                        fully-qualified domain name is present in the DNS A
+                        records, boolean False (0 return code) otherwise
+  --assert_is_present FQDN
+                        returns a 0 return code if a provided fully-qualified
+                        domain name is present in the DNS A records, 1
+                        otherwise
   --remove FQDN         Remove the provided fully qualified domain name, if
                         specified, no hostnames or cnames will be added
   --add FQDN [RANGE ...]

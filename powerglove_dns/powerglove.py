@@ -46,13 +46,12 @@ class PowergloveDns(object):
     @cvar def_config_file: path to default settings config file
     @type def_config_file: C{str}
     """
-    def_config_file = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               'settings.conf')
+    def_config_file = os.path.join(os.path.dirname(os.path.abspath(os.path.expanduser('~'))),
+                               '.powergloverc')
     def __init__(self,
                  config_file=None,
                  pdns_sqla_url=None,
                  session=None,
-                 extra_config_info=None,
                  logger=None):
 
         """
@@ -64,8 +63,6 @@ class PowergloveDns(object):
         @param pdns_sqla_url: the url for the Power DNS installation
         @type pdns_sqla_url: C{str}
         @param session: the existing SQL Alchemy Session
-        @param extra_config_info: C{dict} extra config information to append
-            to the parsed config_file
         @param self.log: the self.log instance to use, else, a new one
             is created
         """
@@ -75,31 +72,33 @@ class PowergloveDns(object):
         else:
             self.log = logger
 
-        if config_file is None:
-            config_file = self.def_config_file
-        if not os.path.exists(config_file):
-            raise PowergloveError('Provided nonexistent config file {0}',
-                                    config_file)
-        self.config = configobj.ConfigObj(config_file)
+        self._setup_sqlalchemy_session(session, pdns_sqla_url, self.def_config_file)
 
-        if extra_config_info is None:
-            extra_config_info = dict()
-        self.config.update(extra_config_info)
+
+    def _setup_sqlalchemy_session(self, session, pdns_sqla_url, config_file):
 
         if session:
             self._session_obj = session
+            return
 
-        elif pdns_sqla_url:
+        if pdns_sqla_url:
             self.sqla_session_obj = pdns_sqla_url
 
-        elif 'sqlalchemy' not in self.config:
-            raise PowergloveDns('Provided config file {0} does not have'
-                               'an sqlalchemy section')
+        if not pdns_sqla_url and (config_file is None or not os.path.exists(config_file)):
+            raise PowergloveError('Non-existent configuration file %r and the command line '
+                                  'doesn\'t specify Power DNS connection; see --help' % config_file)
 
-        else:
-            self.sqla_session_obj = self.config['sqlalchemy']['url']
+        config = configobj.ConfigObj(config_file)
 
+        pdns_sqla_url = config.get('pdns_connect_string')
+        if not pdns_sqla_url:
+            raise PowergloveError("config file %r doesn't specify a 'pdns_connect_string'" % config_file)
 
+        try:
+            self.sqla_session_obj = pdns_sqla_url
+        except Exception:
+            self.log.error('unknown error getting a SQL-Alchemy session with %r', pdns_sqla_url)
+            raise
 
     @property
     def sqla_session_obj(self):
@@ -318,12 +317,12 @@ class PowergloveDns(object):
         self.session.delete(a_record)
         self.session.commit()
 
-    def get_ip_range(self, range, domain=None):
+    def get_ip_range(self, ip_range):
         """
         Get an L{netaddr.IPRange} corresponding with the provided range
 
-        @param range:
-        @type range: C{tuple} of length 0 through 2, all elements must be
+        @param ip_range:
+        @type ip_range: C{tuple} of length 0 through 2, all elements must be
             C{str} and will be parsed as IP address, CIDRs, or IPRanges
         @param domain: If range is length 0, the domain will be used to provide
             a default range for the given domain (e.g. 'test.tld')
@@ -332,36 +331,27 @@ class PowergloveDns(object):
             domain
         """
 
-        assert len(range) <= 2, 'unknown range specified: %r' % range
+        if not len(ip_range) <= 2:
+            raise PowergloveError('unknown range specified: %r' % ip_range)
 
-        if len(range) == 2:
-            lower, upper = range
+        if len(ip_range) == 2:
+            lower, upper = ip_range
             try:
                 ip_range = netaddr.ip.IPRange(lower, upper)
             except netaddr.AddrFormatError, exc:
                 raise PowergloveError(exc)
             return ip_range
-        elif len(range) == 1:
-            _ip = range[0]
+        elif len(ip_range) == 1:
+            _ip = ip_range[0]
             if isinstance(_ip, basestring) and '/' in _ip:
                 _ip=netaddr.ip.glob.cidr_to_glob(_ip)
             if not netaddr.ip.glob.valid_glob(_ip):
                 raise TypeError('unable to convert %r to IPRange' % _ip)
             else:
                 return netaddr.ip.glob.glob_to_iprange(_ip)
-        elif not range and domain is not None:
-            for mapped_domain, range in self.yield_mapped_domains():
-                if mapped_domain == domain:
-                    return range
-
-            raise PowergloveError('unable to handle implicit'
-                                    ' mapping with domain: {0}', domain)
-        elif not range and domain is None:
-            raise PowergloveError('unable to handle implicit '
-                                    'mapping without a range or domain')
         else:
             raise PowergloveError('unable to find a suitable range '
-                                    'using {0} and {1}', range, domain)
+                                    'using {0}', ip_range)
 
     def is_valid_address(self, ip):
         invalid_last_octet = ('0', '1', '255')
@@ -377,11 +367,8 @@ class PowergloveDns(object):
 
         @param cname_fqdn: the FQDN of the alias
         @type cname_fqdn: C{str}
-        @param content_fqdn: the hostname for where the alias points to
-        @type content_fqdn: C{str}
-        @param domain: the domain (e.g. 'test.tld') the CNAME and A are on
-        @param text_contents:  the contents for a TXT record associated with
-            the CNAME record
+        @param a_fqdn: the hostname for where the alias points to
+        @type a_fqdn: C{str}
         @return: C{tuple} consisting of (CNAME FQDN, A FQDN)
 
         """
@@ -417,10 +404,6 @@ class PowergloveDns(object):
             form of L{netaddr.IPRange},L{netaddr.IPGlob}, CIDR, or include both
             start and end IP Addresses
         @type ip_range: None, C{tuple} of max two C{str}
-        @param domain: the domain (e.g. 'test.tld'), if provided and ip_range is
-            not provided, the domain will be used to generate an implicit
-            mapping
-        @type domain: C{str}
         @param ttl: the TTL to use for the given records
         @type ttl: C{int}
         @param text_contents: the contents for a TXT record associated with the
@@ -509,8 +492,7 @@ class PowergloveDns(object):
 
         @param record: Either the A or CNAME record for which created
             associated records will be created
-        @param ttl: the TTL to use for created records
-        @param text_contents:
+        @param text_contents: the content of the associated text record (should there be one)
 
         @return: C{dict} holding all the created records, ready for committing
         """

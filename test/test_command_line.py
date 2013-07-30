@@ -127,6 +127,9 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
         self.add_and_test_new_hostname(['invalid_explicit.test.tld', '192.168.132.150', '192.168.132.5'],
                                        invalid=True)
 
+        self.add_and_test_new_hostname(['invalid_too_many.test.tld', '192.168.132.50', '192.168.132.55', '192.168.132.60'],
+                                       invalid=True)
+
 
         with  self.assertRaises(AssertionError):
             self.add_and_test_new_hostname(['mismatched_ip.stable.tld',
@@ -223,6 +226,12 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
         self.assertFalse(self.run_with_args(['--is_present',
                                              'nonexistant.fqdn']))
 
+        self.assertEqual(self.run_with_args(['--assert_is_present',
+                                             self.pdns.records.testing_a_132.name]), 0)
+
+        self.assertEqual(self.run_with_args(['--assert_is_present',
+                                             'nonexistant.fqdn']), 1)
+
     def test_creation_of_text_record(self):
         """
         Tests that providing text record contents leads to the creation of an associated text record
@@ -262,7 +271,7 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
             return added_hostname
 
 
-    def test_unable_to_handle_no_range_or_domain(self):
+    def test_unable_to_handle_no_range(self):
         with self.assertRaises(PowergloveError) as cm:
             self.run_with_args(['--add', 'fall.down'])
-        self.assertEqual(cm.exception.output, "unable to handle implicit mapping without a range or domain")
+        self.assertIn("unable to find a suitable range", cm.exception.output)
