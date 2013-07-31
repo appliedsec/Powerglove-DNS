@@ -9,7 +9,6 @@ except ImportError:
 
 from copy import deepcopy
 
-import configobj
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 
