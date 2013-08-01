@@ -115,9 +115,7 @@ def setup_mock_pdns(session):
 
     return CurrentPdns(current_domains, current_records)
 
-
-class PowergloveTestCase(unittest.TestCase):
-
+class BasePowergloveTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.log = logging.getLogger('%s.%s' % (cls.__module__, cls.__name__))
@@ -126,6 +124,9 @@ class PowergloveTestCase(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.log.debug('shutting down test case')
+
+
+class PowergloveTestCase(BasePowergloveTestCase):
 
     def get_temporary_file(self):
         """
@@ -184,6 +185,25 @@ class PowergloveTestCase(unittest.TestCase):
         """
 
         return session.query(table).filter_by(**kwargs).all()
+
+    def getOneDomain(self, session=None, **kwargs):
+        """
+        @arg session: the database session to use for the query
+        @args
+        @raise AssertionError: if more or less than one record exists based on
+            the rec_type/name
+        """
+        if session is None:
+            session = self.Session()
+
+        results = self._querySession(session, table=Domain, **kwargs)
+        if len(results) > 1:
+            raise AssertionError('found >1 records for %r: %r' % (kwargs,
+                                                                  results))
+        elif not results:
+            raise AssertionError('No records found for %r' % kwargs)
+
+        return results[0]
 
     def getOneRecord(self, session=None, **kwargs):
         """

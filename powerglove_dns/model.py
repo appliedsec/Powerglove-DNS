@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from copy import deepcopy
 
 from sqlalchemy import Column, VARCHAR, TEXT, INT, SMALLINT
@@ -63,6 +65,27 @@ class Domain(Base, ReprMixin):
         self.type = type
         self.notified_serial = notified_serial
         self.account = account
+
+    def touch_serial(self):
+
+        today = "{0:%Y}{0:%m}{0:%d}".format(datetime.utcnow())
+
+        if not self.notified_serial:
+            increment = 0
+        else:
+            # https://github.com/appliedsec/Powerglove-DNS/issues/3
+            last_day, increment = str(self.notified_serial)[:-2], str(self.notified_serial)[-2:]
+            if today == last_day:
+                # same day update, increment the serial
+                increment = int(increment)
+            else:
+                increment = 0
+
+        new_serial = "{0}{1:02d}".format(today, increment + 1)
+        assert len(new_serial) == 10
+
+        self.notified_serial = int(new_serial)
+
 
     def __repr__(self):
         return '<%s(%s)>' % (self.__class__.__name__, self.name )

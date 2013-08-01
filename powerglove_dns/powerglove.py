@@ -145,12 +145,8 @@ class PowergloveDns(object):
         @return: a C{dict} mapping the domain name
         """
 
-        if not hasattr(self, '_domains'):
-            self._domains = dict([(record.name, record)
-                                  for record in self.session.query(Domain).all()])
-
-
-        return self._domains
+        return dict([(record.name, record)
+                     for record in self.session.query(Domain).all()])
 
     @property
     def a_domains(self):
@@ -253,6 +249,13 @@ class PowergloveDns(object):
 
         return self._get_closest_domain_match_from_string(fqdn, self.a_domains)
 
+    def update_domain_serial(self, domain_id):
+
+        domain_to_update = [dom for dom in self.domains.itervalues() if dom.id == domain_id][0]
+        domain_to_update.touch_serial()
+        self.log.debug('updated serial for %r', domain_to_update)
+        self.session.add(domain_to_update)
+
     def reverse_ip_to_ptr_record(self, ip_address):
         if isinstance(ip_address, IPAddress):
             ip = ip_address
@@ -281,8 +284,8 @@ class PowergloveDns(object):
             return self._remove_cname_record(cname_record)
         else:
             raise PowergloveFqdnNotFoundError('No records associated with '
-                                                'fully-qualified-domain-name:'
-                                                '{0}', fqdn)
+                                              'fully-qualified-domain-name:'
+                                              '{0}', fqdn)
 
     def _remove_cname_record(self, cname_record):
         """
@@ -290,6 +293,7 @@ class PowergloveDns(object):
         """
 
         self.log.info('removing CNAME alias: %s', cname_record)
+        self.update_domain_serial(cname_record.domain_id)
         self.session.delete(cname_record)
         self.session.commit()
 
@@ -303,10 +307,9 @@ class PowergloveDns(object):
                                            content=a_record.name)
 
         if cnames:
-            raise PowergloveError('CNAMES exist for the specified '
-                                    'FQDN {0}:\n{1}',
-                                    a_record.name,
-                                    ' '.join(cname.name for cname in cnames))
+            raise PowergloveError('CNAMES exist for the specified FQDN {0}:\n{1}',
+                                  a_record.name,
+                                  ' '.join(cname.name for cname in cnames))
 
 
         ptr_records = self.get_existing_records(rec_type='PTR',
@@ -318,9 +321,14 @@ class PowergloveDns(object):
         self.log.info('removing associated A/PTR/TXT records for FQDN: %s',
                       a_record.name)
 
+        domain_ids = set([a_record.domain_id])
         for record in itertools.chain(ptr_records, txt_records):
             self.log.debug('removing %s', record)
+            domain_ids.add(record.domain_id)
             self.session.delete(record)
+        for domain_id in domain_ids:
+            self.update_domain_serial(domain_id)
+
         self.session.delete(a_record)
         self.session.commit()
 
@@ -393,6 +401,7 @@ class PowergloveDns(object):
                               id=None)
 
         self.session.add(cname_record)
+        self.update_domain_serial(a_record.domain_id)
         self.session.commit()
 
         self.log.info('created CNAME alias %r', cname_record)
@@ -440,6 +449,8 @@ class PowergloveDns(object):
                         content = str(selected_ip_address),
                         change_date=int(time.time()),
                         id=None)
+
+        self.update_domain_serial(a_record.domain_id)
 
         self.log.debug('setting up "A" record: %r' % a_record)
         created_records = self.create_associated_records(a_record,
@@ -518,6 +529,8 @@ class PowergloveDns(object):
 
             ptr_record = Record(**ptr_kwargs)
             created_records['PTR'] = ptr_record
+
+            self.update_domain_serial(ptr_dom.id)
             self.log.debug('setting up "PTR" record: %r', ptr_record)
 
         if text_contents:
@@ -529,6 +542,9 @@ class PowergloveDns(object):
                                 id=None)
             created_records['TXT'] = txt_record
             self.log.debug('setting up "TXT" record: %r', txt_record)
+        # Is it more correct to NOT update the domain for a A and TEXT
+        # record created in the same invocation?
+        self.update_domain_serial(record.domain_id)
 
         return created_records
 

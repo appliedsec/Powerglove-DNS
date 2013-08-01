@@ -146,18 +146,14 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
 
         self.run_with_args(['--remove', self.pdns.records.stable_a_134.name])
 
-        self.assertRecordExists(type='A',
-                                name=self.pdns.records.testing_a_132.name)
-        self.assertRecordExists(type='A',
-                                name=self.pdns.records.testing_a_133.name)
-        self.assertRecordExists(type='PTR',
-                                name=self.pdns.records.testing_ptr_132.name)
-        self.assertRecordExists(type='PTR',
-                                name=self.pdns.records.testing_ptr_133.name)
-        self.assertRecordDoesNotExist(type='A',
-                                      name=self.pdns.records.stable_a_134.name)
-        self.assertRecordExists(type='A',
-                                name=self.pdns.records.stable_a_135.name)
+        self.assertRecordExists(type='A', name=self.pdns.records.testing_a_132.name)
+        self.assertIsNone(self.getOneDomain(id=self.pdns.records.testing_a_132.domain_id).notified_serial)
+        self.assertRecordExists(type='A', name=self.pdns.records.testing_a_133.name)
+        self.assertRecordExists(type='PTR', name=self.pdns.records.testing_ptr_132.name)
+        self.assertRecordExists(type='PTR', name=self.pdns.records.testing_ptr_133.name)
+        self.assertRecordDoesNotExist(type='A', name=self.pdns.records.stable_a_134.name)
+        self.assertIsNotNone(self.getOneDomain(id=self.pdns.records.stable_a_134.domain_id).notified_serial)
+        self.assertRecordExists(type='A', name=self.pdns.records.stable_a_135.name)
         self.assertRecordDoesNotExist(type='PTR',
                                   name=self.pdns.records.stable_ptr_134.name)
         self.assertRecordExists(type='PTR',
@@ -308,9 +304,12 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
             added_hostname, added_ip_address = self.run_with_args(args)
             a_record = self.getOneRecord(type='A', name=added_hostname)
             self.assertRecordExists(type='A', name=added_hostname)
+            self.assertIsNotNone(self.getOneDomain(id=a_record.domain_id).notified_serial)
             if ip is not None:
                 self.assertRecordExists(type='PTR', content=added_hostname)
+                ptr_record = self.getOneRecord(type='PTR', content=added_hostname)
                 self.assertEqual(ip, a_record.content)
+                self.assertIsNotNone(self.getOneDomain(id=ptr_record.domain_id).notified_serial)
             if delete:
                 self.run_with_args(['--remove', added_hostname])
                 self.assertRecordDoesNotExist(type='A', name=added_hostname)
