@@ -15,6 +15,7 @@ from netaddr import IPAddress
 
 from model import Record, Domain
 
+
 class PowergloveError(Exception):
     """
     Generic Powerglove DNS Error
@@ -46,14 +47,10 @@ class PowergloveDns(object):
     @cvar def_config_file: path to default settings config file
     @type def_config_file: C{str}
     """
-    def_config_file = os.path.join(os.path.dirname(os.path.abspath(os.path.expanduser('~'))),
-                               '.powergloverc')
-    def __init__(self,
-                 config_file=None,
-                 pdns_sqla_url=None,
-                 session=None,
-                 logger=None):
+    def_config_file = os.path.join(os.path.expanduser('~'), '.powergloverc')
+    allowed_configuration_keys = ('pdns_connect_string',)
 
+    def __init__(self, pdns_sqla_url=None, logger=None):
         """
         Initialize the Powerglove DNS object, if session is provided it will be
         used as the instance session. Otherwise, if pdns_sqla_url is
@@ -72,17 +69,27 @@ class PowergloveDns(object):
         else:
             self.log = logger
 
-        self._setup_sqlalchemy_session(session, pdns_sqla_url, self.def_config_file)
+        self._setup_sqlalchemy_session(pdns_sqla_url, self.def_config_file)
 
+    @classmethod
+    def set_config(cls, key, value, config_file=None):
 
-    def _setup_sqlalchemy_session(self, session, pdns_sqla_url, config_file):
+        if config_file is None:
+            config_file = cls.def_config_file
 
-        if session:
-            self._session_obj = session
-            return
+        if key not in cls.allowed_configuration_keys:
+            raise PowergloveError('%r not an allowed configuration key. Possible values are %s' %
+                                  (key, ', '.join(cls.allowed_configuration_keys)))
+
+        config = configobj.ConfigObj(config_file)
+        config[key] = value
+        config.write()
+
+    def _setup_sqlalchemy_session(self, pdns_sqla_url, config_file):
 
         if pdns_sqla_url:
             self.sqla_session_obj = pdns_sqla_url
+            return
 
         if not pdns_sqla_url and (config_file is None or not os.path.exists(config_file)):
             raise PowergloveError('Non-existent configuration file %r and the command line '
@@ -453,8 +460,8 @@ class PowergloveDns(object):
         @type fqdn: C{str}
         """
 
-        return any((self.get_record(name=fqdn),
-                    self.get_record(rec_type='CNAME', name=fqdn)))
+        return any([self.get_record(name=fqdn),
+                    self.get_record(rec_type='CNAME', name=fqdn)])
 
     def get_available_ip_address(self, ip_range):
         """

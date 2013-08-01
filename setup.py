@@ -30,7 +30,7 @@ setup(
     description="Reserves an appropriate ip in a PowerDNS installation for a given hostname, updating reverse/forward/text records as well",
     long_description=read('README.rst'),
     install_requires=get_requirements(),
-    tests_require=['unittest2'],
+    tests_require=['unittest2', 'mock'],
     test_suite = 'unittest2.collector',
     entry_points="""
     [console_scripts]

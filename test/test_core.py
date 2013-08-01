@@ -7,7 +7,7 @@ class PowergloveUtilsTestCase(PowergloveTestCase):
     def setUp(self):
 
         super(PowergloveUtilsTestCase, self).setUp()
-        self.powerglove = PowergloveDns(session=self.Session, logger=self.log)
+        self.powerglove = PowergloveDns(logger=self.log)
 
     def test_get_a_domain(self):
         """

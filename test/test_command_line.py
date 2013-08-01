@@ -4,19 +4,75 @@ from powerglove_dns.powerglove import PowergloveError
 from powerglove_dns.model import Record
 
 # this is either unittest2 or built-in unittest if >= py 2.7
-from test import unittest
+from test import unittest, setup_mock_pdns
 
 
 class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
 
     def run_with_args(self, args):
         self.log.debug('about to run with: %r', args)
-        return main(args, logger=self.log, session=self.Session)
+        return main(args, logger=self.log)
 
+    def test_passing_sqla_url_on_the_command_line_overrides_config_file(self):
+        """
+        if a user passing an sqla connection string on the command,
+        it should be preferentially used over a config file
+        """
+        # using the normal, mocked configuration file
+        self.assertTrue(self.run_with_args(['--is_present', self.pdns.records.testing_a_133.name]))
+        self.add_and_test_new_hostname(['sanity_check.tld', '10.10.*.*'])
+        self.assertTrue(self.run_with_args(['--is_present', 'sanity_check.tld']))
+        # we can also use the exact same connect string as what is in the config file
+        self.assertTrue(self.run_with_args(['--pdns_connect_string', self.original_sqla_connect_string,
+                                            '--is_present', self.pdns.records.testing_a_133.name]))
+        self.assertTrue(self.run_with_args(['--pdns_connect_string', self.original_sqla_connect_string,
+                                            '--is_present', self.pdns.records.testing_a_133.name]))
 
+        new_connect_string = 'sqlite:///%s' % self.get_temporary_file().name
+        self.log.debug('setting up a new PDNS test location at %s', new_connect_string)
+        # we've now setup this new, other PDNS installation to a new place
+        setup_mock_pdns(self.get_session_from_connect_string(new_connect_string)())
+        self.assertTrue(self.run_with_args(['--pdns_connect_string', new_connect_string,
+                                            '--is_present', self.pdns.records.testing_a_133.name]))
+        # this is still using the original SQLite database, so it works
+        self.assertTrue(self.run_with_args(['--is_present', 'sanity_check.tld']))
+        # this is using the overridden value, so it doesn't
+        self.assertFalse(self.run_with_args(['--pdns_connect_string', new_connect_string,
+                                             '--is_present', 'sanity_check.tld']))
+
+    def test_that_setting_an_unallowed_key_errors(self):
+        """
+        arbitrary key-value pairs shouldn't be saved to the config files
+        """
+        with self.assertRaises(PowergloveError):
+            self.run_with_args(['--set', 'some_key', 'some_value'])
+
+    def test_that_the_command_line_can_save_a_new_pdns_connection_string(self):
+        """
+        if a user passing an sqla connection string on the command,
+        it should be preferentially used over a config file
+        """
+        # using the normal, mocked configuration file
+        self.assertTrue(self.run_with_args(['--is_present', self.pdns.records.testing_a_133.name]))
+        self.add_and_test_new_hostname(['sanity_check.tld', '10.10.*.*'])
+        self.assertTrue(self.run_with_args(['--is_present', 'sanity_check.tld']))
+
+        new_connect_string = 'sqlite:///%s' % self.get_temporary_file().name
+        self.log.debug('setting up a new PDNS test location at %s', new_connect_string)
+        # we've now setup this new, other PDNS installation to a new place, and saved it to the config file
+        setup_mock_pdns(self.get_session_from_connect_string(new_connect_string)())
+        # we've set the configuration file to now use this new PDNS file
+        self.run_with_args(['--set', 'pdns_connect_string', new_connect_string])
+        # this is NOT the original SQLite database, so it does not work
+        self.assertFalse(self.run_with_args(['--is_present', 'sanity_check.tld']))
+        # this is using the overridden value, so it doesn't
+        self.assertTrue(self.run_with_args(['--pdns_connect_string', self.original_sqla_connect_string,
+                                             '--is_present', 'sanity_check.tld']))
 
     def test_sanity(self):
-        """test the manually inserted items are indeed in the database"""
+        """
+        test some manually inserted items are indeed in the database
+        """
 
         self.assertRecordExists(type='A',
                                 name=self.pdns.records.testing_a_132.name)
@@ -174,11 +230,9 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
         self.add_and_test_new_hostname(['sanity_check.tld', '10.10.*.*'])
         self.add_and_test_new_hostname(['sanity_check2.tld', '10.20.*.*'])
         sanity_check_10_10 = self.getOneRecord(content='sanity_check.tld', type='PTR')
-        # check setup mock_dns, this is Domain(9, '10.10.in-addr.arpa'),
-        self.assertEqual(sanity_check_10_10.domain_id, 9)
+        self.assertEqual(sanity_check_10_10.domain_id, self.pdns.domains.wide_domain_ptr_10_10.id)
         sanity_check_10_20 = self.getOneRecord(content='sanity_check2.tld', type='PTR')
-        # check setup mock_dns, this is Domain(9, '10.in-addr.arpa'),
-        self.assertEqual(sanity_check_10_20.domain_id, 10)
+        self.assertEqual(sanity_check_10_20.domain_id, self.pdns.domains.wide_domain_ptr_10.id)
 
 
     def test_catching_ranges_outside_what_is_pdns(self):
@@ -214,23 +268,16 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
                                 name=alias_fqdn,
                                 content=existing_fqdn)
 
-    def test_for_presence_of_fqdn(self):
+    def test_assert_difference_between_is_present_and_assert_is_present(self):
         """
-        Tests that there is a simple command line argument for testing if a fully-qualified domain name is present in
-        the A records
+        we want to support command line applications that care about return status
         """
 
-        self.assertTrue(self.run_with_args(['--is_present',
-                                        self.pdns.records.testing_a_132.name]))
-
-        self.assertFalse(self.run_with_args(['--is_present',
-                                             'nonexistant.fqdn']))
-
-        self.assertEqual(self.run_with_args(['--assert_is_present',
-                                             self.pdns.records.testing_a_132.name]), 0)
-
-        self.assertEqual(self.run_with_args(['--assert_is_present',
-                                             'nonexistant.fqdn']), 1)
+        self.assertTrue(self.run_with_args(['--is_present', self.pdns.records.testing_a_133.name]))
+        self.assertEqual(self.run_with_args(['--assert_is_present', self.pdns.records.testing_a_133.name]), 0)
+        self.assertFalse(self.run_with_args(['--is_present', 'nonexistent.name.unknown']))
+        with self.assertRaises(PowergloveError):
+            self.run_with_args(['--assert_is_present', 'nonexistent.name.unknown'])
 
     def test_creation_of_text_record(self):
         """

@@ -1,7 +1,9 @@
 import collections
 import logging
-import logging.config
 import os
+
+from tempfile import NamedTemporaryFile
+
 try:
     import unittest2 as unittest
 except ImportError:
@@ -10,9 +12,14 @@ except ImportError:
 from copy import deepcopy
 
 import sqlalchemy
+
+from mock import patch
 from sqlalchemy.orm import sessionmaker
 
+from powerglove_dns import PowergloveDns
 from powerglove_dns.model import Domain, Base, Record
+
+logging.basicConfig(level=logging.DEBUG)
 
 def setup_mock_pdns(session):
     """
@@ -120,12 +127,51 @@ class PowergloveTestCase(unittest.TestCase):
     def tearDownClass(cls):
         cls.log.debug('shutting down test case')
 
+    def get_temporary_file(self):
+        """
+        simplifies getting and cleaning up a temporary file
+        """
+        temp = NamedTemporaryFile(delete=False)
+        self.addCleanup(os.unlink, temp.name)
 
-    def setUp(self):
-        url = r"sqlite://"
-        self.Session = sessionmaker(bind=sqlalchemy.create_engine(url))
+        return temp
+
+    def get_session_from_connect_string(self, sqla_connect_string):
+        return sessionmaker(bind=sqlalchemy.create_engine(sqla_connect_string))
+
+    def _setup_test_sqlite_database(self):
+        """
+        @return: the SQLA connection string
+        """
+
+        temp = self.get_temporary_file()
+        sqla_connect_string = 'sqlite:///%s' % temp.name
+        self.log.debug('setting up the main session with %s', sqla_connect_string)
+        self.Session = self.get_session_from_connect_string(sqla_connect_string)
         self.log.debug('set up the session')
         self.pdns = setup_mock_pdns(self.Session())
+
+        return sqla_connect_string
+
+
+    def _setup_test_config_file(self, sqla_connect_string):
+        """
+        @return:
+        """
+        temp = self.get_temporary_file()
+
+        with temp as temp_config_file:
+            temp_config_file.write('pdns_connect_string = %r' % sqla_connect_string)
+
+        config_patcher = patch.object(PowergloveDns, 'def_config_file', new=temp.name)
+        self.addCleanup(config_patcher.stop)
+        config_patcher.start()
+
+
+    def setUp(self):
+        self.original_sqla_connect_string = self._setup_test_sqlite_database()
+        self._setup_test_config_file(self.original_sqla_connect_string)
+
 
     def _querySession(self, session, table=Record, **kwargs):
         """

@@ -3,12 +3,12 @@ Powerglove DNS
 [![Build Status](https://travis-ci.org/appliedsec/Powerglove-DNS.png)](https://travis-ci.org/appliedsec/Powerglove-DNS)
 
 ```
-powerglovedns --help
+# powerglovedns --help
 usage: powerglovedns [-h] [--pdns_connect_string PDNS_CONNECT_STRING]
                      [--ttl TTL] [--text TEXT_RECORD_CONTENTS]
-                     (--cname CNAME_FQDN A_Record_FQDN | --is_present FQDN | --assert_is_present FQDN | --remove FQDN | --add FQDN [RANGE ...])
+                     (--set CONFIG_KEY CONFIG_VALUE | --cname CNAME_FQDN A_Record_FQDN | --is_present FQDN | --assert_is_present FQDN | --remove FQDN | --add FQDN [RANGE ...])
 
-Reserve an ip address in the network's powerdns install for the given fully-
+Reserve an ip address in the network's Power DNS install for the given fully-
 qualified domain name
 
 optional arguments:
@@ -17,11 +17,15 @@ optional arguments:
                         the SQL Alchemy-compatible connection string to Power
                         DNS. Required in either the configuration file or on
                         the commandline
+  --set CONFIG_KEY CONFIG_VALUE
+                        if provided, save a key-value pair to the
+                        configuration file, where it will be used if the
+                        command line doesn't set it. Possible keys are:
+                        pdns_connect_string
   --cname CNAME_FQDN A_Record_FQDN
-                        if provided, create a CNAME alias from the
-                        providedcname fully-qualified-domain-name to the
-                        providedA record fully-qualified domain name. No new
-                        hostnames will be added
+                        if provided, create a CNAME alias from the provided
+                        cname fully-qualified-domain-name to the provided A
+                        record fully-qualified domain name.
   --is_present FQDN     returns boolean True (return code 1) if a provided
                         fully-qualified domain name is present in the DNS A
                         records, boolean False (0 return code) otherwise
