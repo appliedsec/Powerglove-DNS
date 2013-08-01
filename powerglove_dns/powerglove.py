@@ -255,6 +255,7 @@ class PowergloveDns(object):
         domain_to_update.touch_serial()
         self.log.debug('updated serial for %r', domain_to_update)
         self.session.add(domain_to_update)
+        self.session.commit()
 
     def reverse_ip_to_ptr_record(self, ip_address):
         if isinstance(ip_address, IPAddress):
