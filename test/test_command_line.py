@@ -288,7 +288,7 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
 
     def test_that_creating_an_a_record_defaults_to_no_text_record(self):
         """
-        Tests that providing text record contents leads to the creation of an associated text record
+        Tests that creating a text record defaults to not creating a text record
         """
 
         self.add_and_test_new_hostname(['record_with_no_associated_text.test.tld', '192.168.132.234'])
