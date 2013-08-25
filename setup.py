@@ -24,7 +24,7 @@ extra_setup = {}
 
 setup(
     name='powerglove-dns',
-    version='2.0.0',
+    version='2.0.1',
     author='Rob Dennis',
     author_email='rdennis+powerglove-dns@gmail.com',
     description="Reserves an appropriate ip in a PowerDNS installation for a given hostname, updating reverse/forward/text records as well",
