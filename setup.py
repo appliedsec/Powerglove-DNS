@@ -31,6 +31,7 @@ setup(
     long_description=read('README.rst'),
     install_requires=get_requirements(),
     tests_require=['unittest2', 'mock'],
+    url="https://github.com/appliedsec/Powerglove-DNS",
     test_suite = 'unittest2.collector',
     entry_points="""
     [console_scripts]

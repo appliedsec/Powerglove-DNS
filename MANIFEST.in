@@ -1,2 +1,2 @@
 include requirements.txt
-recursive-include powerglove_dns *.py *.conf
+recursive-include powerglove_dns *.py
