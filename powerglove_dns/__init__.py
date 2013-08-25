@@ -20,9 +20,8 @@ add_group.add_argument('--ttl', type=int, default=300,
                             '[default: %(default)s]')
 add_group.add_argument('--text', metavar='TEXT_RECORD_CONTENTS',
                        dest='text_record_contents',
-                       default='created by Powerglove-DNS on '
-                               '{0}'.format(datetime.datetime.utcnow()),
-                       help='if specified, make a text record with the provided '
+                       default=None,
+                       help='if specified, make an associated text record with the provided '
                             'contents (as a string)')
 
 action_group = parser.add_mutually_exclusive_group(required=True)

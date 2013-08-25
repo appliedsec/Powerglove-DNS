@@ -286,6 +286,14 @@ class PowergloveDNSCommandLineTestCase(PowergloveTestCase):
         self.assertRecordExists(type='TXT', name='record_with_associated_text.test.tld',
                                 content=text_record)
 
+    def test_that_creating_an_a_record_defaults_to_no_text_record(self):
+        """
+        Tests that providing text record contents leads to the creation of an associated text record
+        """
+
+        self.add_and_test_new_hostname(['record_with_no_associated_text.test.tld', '192.168.132.234'])
+        self.assertRecordDoesNotExist(type='TXT', name='record_with_no_associated_text.test.tld')
+
 
     def add_and_test_new_hostname(self, args, ip=None, invalid=False, delete=False, assertion=PowergloveError):
         """

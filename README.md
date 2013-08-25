@@ -49,6 +49,6 @@ add options:
   --ttl TTL             the TTL that should be set with the added record
                         [default: 300]
   --text TEXT_RECORD_CONTENTS
-                        if specified, make a text record with the provided
-                        contents (as a string)
+                        if specified, make an associated text record with the
+                        provided contents (as a string)
 ```
